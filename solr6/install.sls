@@ -2,6 +2,7 @@
 # vim: ft=sls
 
 {%- from "solr6/map.jinja" import solr6 with context %}
+{% set config_file = "/etc/default/solr.in.sh" %}
 
 
 {%- if "file" in solr6.archive %}
@@ -33,6 +34,7 @@ solr6-download:
 {%-   else %}
     - skip_verify: True
 {%- endif %}
+    - unless: test -f {{ config_file }}
     - require_in:
       - cmd: solr6-extract-installer
 {%- endif %}
@@ -45,8 +47,9 @@ solr6-extract-installer:
   cmd.run:
     - cwd: {{ solr6.install_dir }}
     - name: tar xzf {{ archive_file }} solr-{{ solr6.version }}/bin/install_solr_service.sh --strip-components=2
-    - onchanges:
-      - file: solr6-download
+    - unless: test -f {{ config_file }}
+    - prereq:
+      - cmd: solr6-install
 
 
 #
@@ -56,8 +59,9 @@ solr6-install:
   cmd.run:
     - cwd: {{ solr6.install_dir }}
     - name: {{ solr6.install_dir }}/install_solr_service.sh {{ archive_file }} -f -u {{ solr6.user }} -d {{ solr6.data_dir }} -p {{ solr6.port }} -s {{ solr6.service.name }}
-    - onchanges:
-      - cmd: solr6-extract-installer
+    - unless: test -f {{ config_file }}
+    - require_in:
+      - file: solr6-defaults
 
 #
 # Make sure the version symlink has been updated
@@ -74,7 +78,7 @@ solr6-symlink:
 #
 solr6-defaults:
   file.managed:
-    - name: /etc/default/solr.in.sh
+    - name: {{ config_file }}
     - user: root
     - group: {{ solr6.group }}
     - mode: 640
